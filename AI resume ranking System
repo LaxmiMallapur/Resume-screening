@@ -1,51 +1,51 @@
+import streamlit as st
+from PyPDF2 import PdfReader
 import pandas as pd
-import numpy as np
-import PyPDF2
-import re
-import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Function to extract text from PDFs
-def extract_text_from_pdf(pdf_path):
+# Function to extract text from PDF
+
+def extract_text_from_pdf(file):
+    pdf = PdfReader(file)
     text = ""
-    with open(pdf_path, "rb") as file:
-        reader = PyPDF2.PdfReader(file)
-        for page in reader.pages:
-            text += page.extract_text() + " "
-    return text.strip()
-
-# Function to preprocess text
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    for page in pdf.pages:
+        text += page.extract_text()
     return text
+# Function to rank resumes based on job description
+def rank_resumes(job_description, resumes):
+    # Combine job description with resumes
+    documents = [job_description] + resumes
+    vectorizer = TfidfVectorizer().fit_transform(documents)
+    vectors vectorizer.toarray()
 
-# Load resumes from a folder
-resume_folder = "resumes/"
-resumes = {}
-for filename in os.listdir(resume_folder):
-    if filename.endswith(".pdf"):
-        resume_text = extract_text_from_pdf(os.path.join(resume_folder, filename))
-        resumes[filename] = preprocess_text(resume_text)
+    # Calculate cosine similarity
+    job_description_vector = vectors[0]
+    resume_vectors = vectors [1:]
+    cosine_similarities = cosine_similarity ([job_description_vector], resume_vectors).flatten()
+    
+    return cosine_similarities
+# Streamlit app
+st.title("AI Resume Screening & Candidate Ranking System")
+# Job description input
+st.header("Job Description")
+job_description= st.text_area ("Enter the job description")
+# File uploader
+st.header("Upload Resumes")
+uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
+if uploaded_files and job_description:
+    st.header("Ranking Resumes")
+    
+    resumes = []
+    for file in uploaded_files:
+        text = extract_text_from_pdf(file)
+        resumes.append(text)
 
-# Job description
-description = "Looking for a data analyst with experience in Python, Pandas, and SQL. Strong analytical skills required."
-processed_description = preprocess_text(description)
+    # Rank resumes
+    scores = rank_resumes(job_description, resumes)
 
-# Convert text to vectors
-vectorizer = TfidfVectorizer()
-resume_texts = list(resumes.values()) + [processed_description]
-vectorized_texts = vectorizer.fit_transform(resume_texts)
-
-# Compute similarity scores
-job_vector = vectorized_texts[-1]
-resume_vectors = vectorized_texts[:-1]
-similarity_scores = cosine_similarity(resume_vectors, job_vector.reshape(1, -1))
-
-# Rank candidates
-ranked_resumes = sorted(zip(resumes.keys(), similarity_scores), key=lambda x: x[1], reverse=True)
-
-# Display results
-results_df = pd.DataFrame(ranked_resumes, columns=["Candidate Name", "Match Score"])
-print(results_df)
+    # Display scores
+    results = pd.DataFrame({"Resume": [file.name for file in uploaded_files], "Score": score })
+    results = results.sort_values(by="Score", ascending=False)
+    
+    st.write(results)
